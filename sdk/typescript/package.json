@@ -1,0 +1,49 @@
+{
+  "name": "@openagentlabs/opentrace",
+  "version": "0.1.0",
+  "description": "OpenTrace SDK — capture and write OpenTrace v0.1 agent traces (JSONL), with OpenTelemetry export.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "Open Agent Labs",
+  "keywords": [
+    "agent",
+    "tracing",
+    "observability",
+    "llm",
+    "opentelemetry",
+    "opentrace"
+  ],
+  "homepage": "https://openagentlabs.ai/opentrace",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./content": {
+      "types": "./dist/content.d.ts",
+      "import": "./dist/content.js"
+    }
+  },
+  "bin": {
+    "opentrace": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "tsc",
+    "test": "node test/smoke.mjs",
+    "cli": "node dist/cli.js"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  }
+}

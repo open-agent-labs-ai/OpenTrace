@@ -1,0 +1,26 @@
+OpenTrace — dual license
+========================
+
+Copyright (c) 2026 Open Agent Labs.
+
+This repository is licensed under two licenses depending on the material:
+
+1. The SPECIFICATION (SPECIFICATION.md, the JSON Schema in schema/, and the prose in
+   docs/) is licensed under the Creative Commons Attribution 4.0 International License
+   (CC BY 4.0). You are free to share and adapt it, including for commercial purposes,
+   provided you give appropriate credit. Full text: https://creativecommons.org/licenses/by/4.0/
+
+2. All SOURCE CODE (the SDKs in sdk/, the viewer in viewer/, the demo in demo/, and the
+   adapters in adapters/) is licensed under the Apache License, Version 2.0. You may
+   obtain a copy of the License at: https://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software distributed
+   under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+   CONDITIONS OF ANY KIND, either express or implied. See the License for the specific
+   language governing permissions and limitations under the License.
+
+Trademarks: "OpenTrace" and "Open Agent Labs" names and logos are not licensed under
+either license above and may not be used to imply endorsement without permission.
+Third-party names referenced in the adapters (Claude, Copilot, OpenCode, Dify,
+LlamaIndex, Pydantic AI, OpenClaw, Hermes, etc.) are the property of their respective
+owners and are used for identification only.

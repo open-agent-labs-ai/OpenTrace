@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+.venv/
+venv/
+
+# Node / TypeScript
+node_modules/
+sdk/typescript/dist/
+*.tsbuildinfo
+
+# OS / editor
+.DS_Store
+*.swp
+
+# Local traces (keep examples/ and demo/sample_trace.ot.jsonl)
+*.ot.jsonl
+!examples/*.ot.jsonl
+!demo/sample_trace.ot.jsonl

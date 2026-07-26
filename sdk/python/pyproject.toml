@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opentrace-sdk"
+version = "0.1.0"
+description = "OpenTrace SDK — capture and write OpenTrace agent traces (JSONL), with OpenTelemetry export."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Open Agent Labs" }]
+keywords = ["agent", "tracing", "observability", "llm", "opentelemetry", "opentrace"]
+dependencies = []
+
+[project.urls]
+Homepage = "https://openagentlabs.ai/opentrace"
+Specification = "https://openagentlabs.ai/opentrace"
+
+[project.optional-dependencies]
+otel = [
+  "opentelemetry-sdk>=1.20",
+  "opentelemetry-exporter-otlp>=1.20",
+]
+validate = ["jsonschema>=4.0"]
+dev = ["pytest>=7", "jsonschema>=4.0"]
+
+[project.scripts]
+opentrace = "opentrace.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["opentrace*"]

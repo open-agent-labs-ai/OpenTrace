@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenTrace Viewer</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c2330; --border:#2a323d;
+    --fg:#e6edf3; --muted:#8b98a5; --accent:#4c8dff; --track:#222b36;
+    --ok:#3fb950; --err:#f85149; --warn:#d29922;
+    --k-llm:#7c9cff; --k-tool:#f0883e; --k-agent:#a371f7; --k-turn:#58a6ff;
+    --k-plan:#39c5cf; --k-handoff:#db61a2; --k-classifier:#e3b341;
+    --k-guardrail:#f85149; --k-evaluator:#3fb950; --k-retriever:#56d364;
+    --k-human:#ff7b72; --k-embedding:#6cb6ff; --k-reranker:#bc8cff;
+    --k-chain:#8b98a5; --k-workflow:#58a6ff; --k-session:#58a6ff;
+    --k-harness:#c9a227; --k-memory:#79c0ff; --k-custom:#8b98a5;
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#f6f8fa; --panel:#fff; --panel2:#f0f3f6; --border:#d0d7de;
+      --fg:#1f2328; --muted:#636c76; --track:#eaeef2; }
+  }
+  :root[data-theme="light"]{ --bg:#f6f8fa; --panel:#fff; --panel2:#f0f3f6;
+    --border:#d0d7de; --fg:#1f2328; --muted:#636c76; --track:#eaeef2; }
+  :root[data-theme="dark"]{ --bg:#0e1116; --panel:#161b22; --panel2:#1c2330;
+    --border:#2a323d; --fg:#e6edf3; --muted:#8b98a5; --track:#222b36; }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; }
+  body{ background:var(--bg); color:var(--fg); font:13px/1.5 ui-sans-serif,-apple-system,
+    "Segoe UI",Roboto,Helvetica,Arial,sans-serif; display:flex; flex-direction:column; height:100vh; }
+  code,pre,.mono{ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
+
+  header{ display:flex; align-items:center; gap:12px; padding:10px 16px;
+    border-bottom:1px solid var(--border); background:var(--panel); flex-wrap:wrap; }
+  header h1{ font-size:15px; margin:0; font-weight:650; letter-spacing:.2px; }
+  header h1 .dot{ color:var(--accent); }
+  .spacer{ flex:1; }
+  button,select,label.btn{ background:var(--panel2); color:var(--fg);
+    border:1px solid var(--border); border-radius:6px; padding:5px 10px; font-size:12px;
+    cursor:pointer; }
+  button:hover,label.btn:hover{ border-color:var(--accent); }
+  input[type=file]{ display:none; }
+
+  .chips{ display:flex; gap:8px; flex-wrap:wrap; }
+  .chip{ background:var(--panel2); border:1px solid var(--border); border-radius:20px;
+    padding:3px 10px; font-size:11px; color:var(--muted); white-space:nowrap; }
+  .chip b{ color:var(--fg); font-weight:600; }
+  .chip.ok b{ color:var(--ok); } .chip.err b{ color:var(--err); }
+
+  main{ display:flex; flex:1; min-height:0; }
+  .left{ flex:1; min-width:0; overflow:auto; }
+  .right{ width:40%; max-width:560px; min-width:320px; border-left:1px solid var(--border);
+    background:var(--panel); overflow:auto; padding:0; }
+
+  .axis{ position:sticky; top:0; z-index:5; background:var(--panel); border-bottom:1px solid var(--border);
+    display:flex; height:26px; align-items:center; }
+  .axis .lbl{ width:var(--namew,340px); flex:none; padding-left:12px; color:var(--muted);
+    font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+  .axis .ticks{ position:relative; flex:1; height:100%; }
+  .axis .tick{ position:absolute; top:0; height:100%; border-left:1px solid var(--border);
+    color:var(--muted); font-size:10px; padding-left:3px; }
+
+  .row{ display:flex; align-items:center; height:26px; cursor:pointer; border-bottom:1px solid transparent; }
+  .row:hover{ background:var(--panel2); }
+  .row.sel{ background:color-mix(in srgb,var(--accent) 18%, transparent); }
+  .row .name{ width:var(--namew,340px); flex:none; display:flex; align-items:center; gap:6px;
+    overflow:hidden; white-space:nowrap; padding-right:8px; }
+  .toggle{ width:14px; flex:none; text-align:center; color:var(--muted); user-select:none; }
+  .kind{ font-size:9px; text-transform:uppercase; letter-spacing:.4px; padding:1px 5px;
+    border-radius:4px; flex:none; color:#0b0e13; font-weight:700; }
+  :root[data-theme="dark"] .kind, :root:not([data-theme="light"]) .kind{ color:#0b0e13; }
+  .nm{ overflow:hidden; text-overflow:ellipsis; }
+  .row .track{ position:relative; flex:1; height:100%; }
+  .bar{ position:absolute; top:6px; height:14px; border-radius:3px; min-width:2px; opacity:.92; }
+  .bar .barlbl{ position:absolute; left:100%; margin-left:6px; top:-1px; font-size:10px;
+    color:var(--muted); white-space:nowrap; }
+  .bar.open{ background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,.25) 3px,rgba(255,255,255,.25) 6px); }
+  .evmark{ position:absolute; top:3px; width:6px; height:6px; border-radius:50%; background:var(--muted);
+    transform:translateX(-3px); }
+  .barx{ position:absolute; top:8px; width:10px; height:10px; }
+
+  .drop{ position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+    background:rgba(0,0,0,.5); z-index:20; font-size:16px; color:#fff; }
+  .drop.on{ display:flex; }
+  .empty{ padding:40px; text-align:center; color:var(--muted); }
+
+  /* inspector */
+  .insp{ padding:14px 16px; }
+  .insp h2{ font-size:14px; margin:0 0 2px; }
+  .insp .sub{ color:var(--muted); font-size:11px; margin-bottom:12px; }
+  .kv{ display:grid; grid-template-columns:120px 1fr; gap:2px 10px; margin-bottom:12px; }
+  .kv .k{ color:var(--muted); } .kv .v{ overflow-wrap:anywhere; }
+  .sec{ margin:14px 0 6px; font-size:11px; text-transform:uppercase; letter-spacing:.5px;
+    color:var(--muted); border-bottom:1px solid var(--border); padding-bottom:4px; }
+  pre.j{ background:var(--panel2); border:1px solid var(--border); border-radius:6px; padding:10px;
+    overflow:auto; max-height:340px; font-size:11.5px; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .msg{ border:1px solid var(--border); border-radius:6px; margin-bottom:8px; overflow:hidden; }
+  .msg .mh{ padding:3px 8px; font-size:10px; text-transform:uppercase; letter-spacing:.5px;
+    background:var(--panel2); color:var(--muted); }
+  .msg .mb{ padding:8px; }
+  .part{ margin-bottom:6px; }
+  .part .pt{ font-size:9px; text-transform:uppercase; color:var(--accent); letter-spacing:.5px; }
+  .reason{ color:var(--muted); font-style:italic; }
+  .evlist .ev{ display:flex; gap:8px; padding:3px 0; border-bottom:1px solid var(--border); font-size:12px; }
+  .evlist .ev .en{ color:var(--accent); flex:none; width:96px; }
+  .badge{ display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; }
+  .badge.pass{ background:rgba(63,185,80,.2); color:var(--ok); }
+  .badge.err{ background:rgba(248,81,73,.2); color:var(--err); }
+  a.link{ color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Open<span class="dot">Trace</span> Viewer</h1>
+  <label class="btn">Open .ot.jsonl<input id="file" type="file" accept=".jsonl,.ot,.json,.gz,application/json"></label>
+  <button id="demo">Load demo trace</button>
+  <select id="traceSel" title="trace" style="display:none"></select>
+  <div class="spacer"></div>
+  <div id="chips" class="chips"></div>
+  <button id="theme" title="toggle theme">◐</button>
+</header>
+<main>
+  <div class="left" id="left">
+    <div class="empty" id="empty">
+      Drop an <code>.ot.jsonl</code> file here, use <b>Open</b>, or click <b>Load demo trace</b>.<br><br>
+      Generate one with the SDK: <code>python3 demo/research_agent_demo.py</code>
+    </div>
+    <div id="grid" style="display:none">
+      <div class="axis"><div class="lbl">Span</div><div class="ticks" id="ticks"></div></div>
+      <div id="rows"></div>
+    </div>
+  </div>
+  <div class="right"><div class="insp" id="insp"><div class="empty">Select a span to inspect.</div></div></div>
+</main>
+<div class="drop" id="drop">Drop OpenTrace file to load</div>
+
+<script>
+const EMBEDDED_DEMO = "{\"ot\":\"0.1\",\"type\":\"trace.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"seq\":0,\"time\":\"2026-07-25T23:18:04.439835Z\",\"name\":\"quarterly-ai-market-brief\",\"producer\":{\"name\":\"hermes-agent\",\"version\":\"3.2.0\",\"sdk\":\"opentrace-py\",\"sdk_version\":\"0.1.0\"},\"environment\":\"production\",\"execution_context\":\"runtime\",\"resource\":{\"service.name\":\"research-assistant\",\"service.version\":\"3.2.0\",\"host.name\":\"worker-7\"},\"session_id\":\"sess_9f2\",\"user\":{\"id\":\"u_hash_1a2b\",\"anonymized\":true},\"inputs\":{\"goal\":\"Write a brief on the AI agent market and its 2026 growth rate.\"},\"tool_definitions\":[{\"name\":\"web_search\",\"type\":\"function\",\"description\":\"Search the web\"},{\"name\":\"calculator\",\"type\":\"function\",\"description\":\"Evaluate arithmetic\"},{\"name\":\"fetch_url\",\"type\":\"function\",\"description\":\"Fetch a web page\"},{\"name\":\"write_report\",\"type\":\"agent\",\"description\":\"Delegate to the writer sub-agent\"}],\"system_instructions\":[{\"role\":\"system\",\"parts\":[{\"type\":\"text\",\"text\":\"You are Hermes, a meticulous research assistant.\"}]}],\"metadata\":{\"capture_level\":\"full\"},\"agent\":{\"id\":\"orchestrator\",\"name\":\"Hermes\",\"role\":\"orchestrator\",\"model\":\"anthropic/claude-opus-4-8\",\"framework\":\"hermes-agent\"}}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"262fa50fbca240e9\",\"seq\":1,\"time\":\"2026-07-25T23:18:04.440751Z\",\"kind\":\"turn\",\"name\":\"turn 1\",\"turn_id\":\"262fa50fbca240e9\",\"session_id\":\"sess_9f2\",\"input\":[{\"role\":\"user\",\"parts\":[{\"type\":\"text\",\"text\":\"Research the AI agent market and draft a short brief.\"}]}]}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"be3e363bcd825bd7\",\"parent_id\":\"262fa50fbca240e9\",\"seq\":2,\"time\":\"2026-07-25T23:18:04.440804Z\",\"kind\":\"agent\",\"name\":\"Hermes\",\"turn_id\":\"262fa50fbca240e9\",\"session_id\":\"sess_9f2\",\"agent\":{\"id\":\"orchestrator\",\"name\":\"Hermes\",\"role\":\"orchestrator\",\"model\":\"anthropic/claude-opus-4-8\",\"framework\":\"hermes-agent\"},\"model\":\"anthropic/claude-opus-4-8\"}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"de0c1a26fbd5c77b\",\"parent_id\":\"be3e363bcd825bd7\",\"seq\":3,\"time\":\"2026-07-25T23:18:04.440843Z\",\"kind\":\"classifier\",\"name\":\"intent-router\",\"turn_id\":\"262fa50fbca240e9\",\"session_id\":\"sess_9f2\",\"candidates\":[\"chitchat\",\"research\",\"coding\"],\"chosen\":\"research\",\"confidence\":0.97,\"scores\":{\"research\":0.97,\"coding\":0.02,\"chitchat\":0.01},\"rationale\":\"Query asks to research a market and draft a brief.\",\"model\":\"anthropic/claude-haiku-4-5\"}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"de0c1a26fbd5c77b\",\"kind\":\"classifier\",\"status\":{\"code\":\"ok\"},\"usage\":{\"input_tokens\":220,\"output_tokens\":12,\"total_tokens\":232},\"cost\":{\"total\":0.0002,\"currency\":\"USD\"},\"turn_id\":\"262fa50fbca240e9\",\"type\":\"span.end\",\"seq\":4,\"time\":\"2026-07-25T23:18:04.440896Z\"}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"8be7954a95d5f009\",\"parent_id\":\"be3e363bcd825bd7\",\"seq\":5,\"time\":\"2026-07-25T23:18:04.440938Z\",\"kind\":\"plan\",\"name\":\"plan\",\"turn_id\":\"262fa50fbca240e9\",\"session_id\":\"sess_9f2\",\"plan\":{\"id\":\"plan_1\",\"goal\":\"Produce a sourced brief on the AI agent market\",\"revision\":1,\"steps\":[{\"id\":\"s1\",\"description\":\"Gather sources (search + fetch)\",\"status\":\"pending\"},{\"id\":\"s2\",\"description\":\"Compute 2026 growth rate\",\"status\":\"pending\",\"depends_on\":[\"s1\"]},{\"id\":\"s3\",\"description\":\"Delegate drafting to writer\",\"status\":\"pending\",\"depends_on\":[\"s2\"]},{\"id\":\"s4\",\"description\":\"Safety + quality review\",\"status\":\"pending\",\"depends_on\":[\"s3\"]}]}}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"8be7954a95d5f009\",\"kind\":\"plan\",\"status\":{\"code\":\"ok\"},\"turn_id\":\"262fa50fbca240e9\",\"type\":\"span.end\",\"seq\":6,\"time\":\"2026-07-25T23:18:04.440966Z\"}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"6b14c352ff7c75ba\",\"parent_id\":\"be3e363bcd825bd7\",\"seq\":7,\"time\":\"2026-07-25T23:18:04.440995Z\",\"kind\":\"retriever\",\"name\":\"kb-retrieval\",\"turn_id\":\"262fa50fbca240e9\",\"session_id\":\"sess_9f2\",\"query\":\"AI agent market size 2025 2026 forecast\"}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"6b14c352ff7c75ba\",\"kind\":\"retriever\",\"status\":{\"code\":\"ok\"},\"usage\":{\"input_tokens\":0,\"output_tokens\":0,\"total_tokens\":0},\"turn_id\":\"262fa50fbca240e9\",\"type\":\"span.end\",\"seq\":8,\"time\":\"2026-07-25T23:18:04.441018Z\"}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"ae11df37195421f6\",\"parent_id\":\"be3e363bcd825bd7\",\"seq\":9,\"time\":\"2026-07-25T23:18:04.441054Z\",\"kind\":\"llm\",\"name\":\"chat anthropic/claude-opus-4-8\",\"turn_id\":\"262fa50fbca240e9\",\"session_id\":\"sess_9f2\",\"model\":\"anthropic/claude-opus-4-8\",\"provider\":\"anthropic\",\"request\":{\"temperature\":0.2,\"max_tokens\":2048,\"reasoning_effort\":\"high\",\"stream\":true},\"input\":{\"messages\":[{\"role\":\"user\",\"parts\":[{\"type\":\"text\",\"text\":\"Research the AI agent market and draft a short brief.\"}]}]}}\n{\"ot\":\"0.1\",\"type\":\"event\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"ae11df37195421f6\",\"seq\":10,\"time\":\"2026-07-25T23:18:04.441086Z\",\"name\":\"reasoning\",\"turn_id\":\"262fa50fbca240e9\",\"content\":[{\"type\":\"reasoning\",\"text\":\"The KB is a year old; I should verify 2026 numbers with a live search before quoting a growth rate.\",\"signature\":\"sig_a1\"}]}\n{\"ot\":\"0.1\",\"type\":\"event\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"ae11df37195421f6\",\"seq\":11,\"time\":\"2026-07-25T23:18:04.441104Z\",\"name\":\"delta\",\"turn_id\":\"262fa50fbca240e9\",\"content\":\"I'll \",\"channel\":\"text\",\"index\":0}\n{\"ot\":\"0.1\",\"type\":\"event\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"ae11df37195421f6\",\"seq\":12,\"time\":\"2026-07-25T23:18:04.441120Z\",\"name\":\"delta\",\"turn_id\":\"262fa50fbca240e9\",\"content\":\"search \",\"channel\":\"text\",\"index\":0}\n{\"ot\":\"0.1\",\"type\":\"event\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"ae11df37195421f6\",\"seq\":13,\"time\":\"2026-07-25T23:18:04.441135Z\",\"name\":\"delta\",\"turn_id\":\"262fa50fbca240e9\",\"content\":\"for the \",\"channel\":\"text\",\"index\":0}\n{\"ot\":\"0.1\",\"type\":\"event\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"ae11df37195421f6\",\"seq\":14,\"time\":\"2026-07-25T23:18:04.441150Z\",\"name\":\"delta\",\"turn_id\":\"262fa50fbca240e9\",\"content\":\"latest \",\"channel\":\"text\",\"index\":0}\n{\"ot\":\"0.1\",\"type\":\"event\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"ae11df37195421f6\",\"seq\":15,\"time\":\"2026-07-25T23:18:04.441165Z\",\"name\":\"delta\",\"turn_id\":\"262fa50fbca240e9\",\"content\":\"figures.\",\"channel\":\"text\",\"index\":0}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"ae11df37195421f6\",\"kind\":\"llm\",\"status\":{\"code\":\"ok\"},\"output\":{\"messages\":[{\"role\":\"assistant\",\"parts\":[{\"type\":\"reasoning\",\"text\":\"Verify with live search.\",\"signature\":\"sig_a1\"},{\"type\":\"text\",\"text\":\"I'll search for the latest figures.\"},{\"type\":\"tool_call\",\"tool_call_id\":\"call_s1\",\"name\":\"web_search\",\"arguments\":{\"query\":\"AI agent market size 2026 forecast\"}}],\"finish_reason\":\"tool_call\"}]},\"usage\":{\"input_tokens\":1840,\"output_tokens\":96,\"reasoning_tokens\":210,\"cache_read_tokens\":1600,\"total_tokens\":1936},\"cost\":{\"input\":0.0055,\"output\":0.0072,\"total\":0.0127,\"currency\":\"USD\"},\"turn_id\":\"262fa50fbca240e9\",\"type\":\"span.end\",\"seq\":16,\"time\":\"2026-07-25T23:18:04.441186Z\"}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"afb0c5d446ccf627\",\"parent_id\":\"be3e363bcd825bd7\",\"seq\":17,\"time\":\"2026-07-25T23:18:04.441221Z\",\"kind\":\"tool\",\"name\":\"web_search\",\"turn_id\":\"262fa50fbca240e9\",\"session_id\":\"sess_9f2\",\"tool_name\":\"web_search\",\"tool_call_id\":\"call_s1\",\"tool_type\":\"function\",\"arguments\":{\"query\":\"AI agent market size 2026 forecast\"}}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"afb0c5d446ccf627\",\"kind\":\"tool\",\"status\":{\"code\":\"ok\"},\"output\":{\"results\":[{\"title\":\"Agent market to hit $7B in 2026\",\"url\":\"https://example.com/a\"},{\"title\":\"Enterprise agent adoption up 40%\",\"url\":\"https://example.com/b\"}]},\"turn_id\":\"262fa50fbca240e9\",\"type\":\"span.end\",\"seq\":18,\"time\":\"2026-07-25T23:18:04.441241Z\"}\n{\"ot\":\"0.1\",\"type\":\"event\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"be3e363bcd825bd7\",\"seq\":19,\"time\":\"2026-07-25T23:18:04.441262Z\",\"name\":\"plan_update\",\"turn_id\":\"262fa50fbca240e9\",\"plan_id\":\"plan_1\",\"step_id\":\"s1\",\"status\":\"in_progress\"}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"bb5954c96fdbf3a9\",\"parent_id\":\"be3e363bcd825bd7\",\"seq\":20,\"time\":\"2026-07-25T23:18:04.441285Z\",\"kind\":\"tool\",\"name\":\"fetch_url\",\"turn_id\":\"262fa50fbca240e9\",\"session_id\":\"sess_9f2\",\"tool_name\":\"fetch_url\",\"tool_call_id\":\"call_f1\",\"tool_type\":\"function\",\"arguments\":{\"url\":\"https://example.com/a\"}}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"bb5954c96fdbf3a9\",\"kind\":\"tool\",\"status\":{\"code\":\"error\",\"message\":\"rate limited\"},\"error\":{\"type\":\"RuntimeError\",\"message\":\"429 rate limited by upstream\"},\"turn_id\":\"262fa50fbca240e9\",\"type\":\"span.end\",\"seq\":21,\"time\":\"2026-07-25T23:18:04.441308Z\"}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"e5c4959ae11e15c7\",\"parent_id\":\"be3e363bcd825bd7\",\"seq\":22,\"time\":\"2026-07-25T23:18:04.441330Z\",\"kind\":\"tool\",\"name\":\"fetch_url\",\"turn_id\":\"262fa50fbca240e9\",\"session_id\":\"sess_9f2\",\"tool_name\":\"fetch_url\",\"tool_call_id\":\"call_f2\",\"tool_type\":\"function\",\"arguments\":{\"url\":\"https://example.com/a\",\"retry\":1}}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"e5c4959ae11e15c7\",\"kind\":\"tool\",\"status\":{\"code\":\"ok\"},\"output\":{\"status\":200,\"text\":\"...$7.0B in 2026, up from $5.1B in 2025...\"},\"turn_id\":\"262fa50fbca240e9\",\"type\":\"span.end\",\"seq\":23,\"time\":\"2026-07-25T23:18:04.441348Z\"}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"e53ed12a9816bedb\",\"parent_id\":\"be3e363bcd825bd7\",\"seq\":24,\"time\":\"2026-07-25T23:18:04.441370Z\",\"kind\":\"tool\",\"name\":\"calculator\",\"turn_id\":\"262fa50fbca240e9\",\"session_id\":\"sess_9f2\",\"tool_name\":\"calculator\",\"tool_call_id\":\"call_c1\",\"tool_type\":\"function\",\"arguments\":{\"expr\":\"(7.0-5.1)/5.1*100\"}}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"e53ed12a9816bedb\",\"kind\":\"tool\",\"status\":{\"code\":\"ok\"},\"output\":{\"value\":37.25,\"unit\":\"percent\"},\"turn_id\":\"262fa50fbca240e9\",\"type\":\"span.end\",\"seq\":25,\"time\":\"2026-07-25T23:18:04.441391Z\"}\n{\"ot\":\"0.1\",\"type\":\"event\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"be3e363bcd825bd7\",\"seq\":26,\"time\":\"2026-07-25T23:18:04.441408Z\",\"name\":\"plan_update\",\"turn_id\":\"262fa50fbca240e9\",\"plan_id\":\"plan_1\",\"step_id\":\"s1\",\"status\":\"done\"}\n{\"ot\":\"0.1\",\"type\":\"event\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"be3e363bcd825bd7\",\"seq\":27,\"time\":\"2026-07-25T23:18:04.441423Z\",\"name\":\"plan_update\",\"turn_id\":\"262fa50fbca240e9\",\"plan_id\":\"plan_1\",\"step_id\":\"s2\",\"status\":\"done\"}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"c5d0443742373356\",\"parent_id\":\"be3e363bcd825bd7\",\"seq\":28,\"time\":\"2026-07-25T23:18:04.441442Z\",\"kind\":\"handoff\",\"name\":\"handoff -> writer\",\"turn_id\":\"262fa50fbca240e9\",\"session_id\":\"sess_9f2\",\"from_agent\":\"orchestrator\",\"to_agent\":\"writer\",\"mode\":\"delegate\",\"reason\":\"sources gathered; draft the brief\",\"payload\":{\"growth_rate_pct\":37.25,\"sources\":[\"example.com/a\",\"example.com/b\"]},\"returns\":true}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"b14e761961a52d35\",\"parent_id\":\"c5d0443742373356\",\"seq\":29,\"time\":\"2026-07-25T23:18:04.441473Z\",\"kind\":\"agent\",\"name\":\"Writer\",\"turn_id\":\"262fa50fbca240e9\",\"session_id\":\"sess_9f2\",\"agent\":{\"id\":\"writer\",\"name\":\"Writer\",\"role\":\"subagent\",\"model\":\"anthropic/claude-sonnet-4-6\"},\"model\":\"anthropic/claude-sonnet-4-6\"}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"a469c51dfb3cd914\",\"parent_id\":\"b14e761961a52d35\",\"seq\":30,\"time\":\"2026-07-25T23:18:04.441496Z\",\"kind\":\"llm\",\"name\":\"chat anthropic/claude-sonnet-4-6\",\"turn_id\":\"262fa50fbca240e9\",\"session_id\":\"sess_9f2\",\"model\":\"anthropic/claude-sonnet-4-6\",\"provider\":\"anthropic\",\"input\":{\"messages\":[{\"role\":\"user\",\"parts\":[{\"type\":\"text\",\"text\":\"Draft a 120-word brief using the sources and 37.25% growth.\"}]}]}}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"a469c51dfb3cd914\",\"kind\":\"llm\",\"status\":{\"code\":\"ok\"},\"output\":{\"messages\":[{\"role\":\"assistant\",\"parts\":[{\"type\":\"text\",\"text\":\"The AI agent market grew from $5.1B (2025) to a projected $7.0B (2026), a 37% increase ...\"}],\"finish_reason\":\"stop\"}]},\"usage\":{\"input_tokens\":900,\"output_tokens\":260,\"total_tokens\":1160},\"cost\":{\"total\":0.006,\"currency\":\"USD\"},\"turn_id\":\"262fa50fbca240e9\",\"type\":\"span.end\",\"seq\":31,\"time\":\"2026-07-25T23:18:04.441519Z\"}\n{\"ot\":\"0.1\",\"type\":\"event\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"b14e761961a52d35\",\"seq\":32,\"time\":\"2026-07-25T23:18:04.441546Z\",\"name\":\"artifact\",\"turn_id\":\"262fa50fbca240e9\",\"artifact\":{\"id\":\"artifact_brief\",\"mime_type\":\"text/markdown\",\"name\":\"ai-agent-market-brief.md\",\"bytes\":812}}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"b14e761961a52d35\",\"kind\":\"agent\",\"status\":{\"code\":\"ok\"},\"turn_id\":\"262fa50fbca240e9\",\"type\":\"span.end\",\"seq\":33,\"time\":\"2026-07-25T23:18:04.441561Z\"}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"c5d0443742373356\",\"kind\":\"handoff\",\"status\":{\"code\":\"ok\"},\"turn_id\":\"262fa50fbca240e9\",\"type\":\"span.end\",\"seq\":34,\"time\":\"2026-07-25T23:18:04.441577Z\"}\n{\"ot\":\"0.1\",\"type\":\"event\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"be3e363bcd825bd7\",\"seq\":35,\"time\":\"2026-07-25T23:18:04.441593Z\",\"name\":\"plan_update\",\"turn_id\":\"262fa50fbca240e9\",\"plan_id\":\"plan_1\",\"step_id\":\"s3\",\"status\":\"done\"}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"4b2dc11417add2e8\",\"parent_id\":\"be3e363bcd825bd7\",\"seq\":36,\"time\":\"2026-07-25T23:18:04.441615Z\",\"kind\":\"guardrail\",\"name\":\"pii-and-claims\",\"turn_id\":\"262fa50fbca240e9\",\"session_id\":\"sess_9f2\",\"policy\":\"pii-and-claims\",\"verdict\":\"pass\",\"categories\":[\"pii\",\"unsupported_claims\"],\"score\":0.02}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"4b2dc11417add2e8\",\"kind\":\"guardrail\",\"status\":{\"code\":\"ok\"},\"turn_id\":\"262fa50fbca240e9\",\"type\":\"span.end\",\"seq\":37,\"time\":\"2026-07-25T23:18:04.441634Z\"}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"4d2011fa0a21a3e9\",\"parent_id\":\"be3e363bcd825bd7\",\"seq\":38,\"time\":\"2026-07-25T23:18:04.441654Z\",\"kind\":\"evaluator\",\"name\":\"brief-quality\",\"turn_id\":\"262fa50fbca240e9\",\"session_id\":\"sess_9f2\",\"criteria\":[\"accuracy\",\"sourcing\",\"concision\"]}\n{\"ot\":\"0.1\",\"type\":\"event\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"4d2011fa0a21a3e9\",\"seq\":39,\"time\":\"2026-07-25T23:18:04.441674Z\",\"name\":\"score\",\"turn_id\":\"262fa50fbca240e9\",\"score_name\":\"accuracy\",\"value\":0.93,\"data_type\":\"numeric\",\"target_span_id\":\"4d2011fa0a21a3e9\"}\n{\"ot\":\"0.1\",\"type\":\"event\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"4d2011fa0a21a3e9\",\"seq\":40,\"time\":\"2026-07-25T23:18:04.441690Z\",\"name\":\"score\",\"turn_id\":\"262fa50fbca240e9\",\"score_name\":\"sourcing\",\"value\":0.88,\"data_type\":\"numeric\",\"target_span_id\":\"4d2011fa0a21a3e9\"}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"4d2011fa0a21a3e9\",\"kind\":\"evaluator\",\"status\":{\"code\":\"ok\"},\"turn_id\":\"262fa50fbca240e9\",\"type\":\"span.end\",\"seq\":41,\"time\":\"2026-07-25T23:18:04.441705Z\"}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"e3f9edc72d74185e\",\"parent_id\":\"be3e363bcd825bd7\",\"seq\":42,\"time\":\"2026-07-25T23:18:04.441725Z\",\"kind\":\"human\",\"name\":\"approval\",\"turn_id\":\"262fa50fbca240e9\",\"session_id\":\"sess_9f2\",\"interaction\":\"approval\",\"request\":{\"summary\":\"Publish the brief?\"}}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"e3f9edc72d74185e\",\"kind\":\"human\",\"status\":{\"code\":\"ok\"},\"turn_id\":\"262fa50fbca240e9\",\"type\":\"span.end\",\"seq\":43,\"time\":\"2026-07-25T23:18:04.441745Z\"}\n{\"ot\":\"0.1\",\"type\":\"event\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"be3e363bcd825bd7\",\"seq\":44,\"time\":\"2026-07-25T23:18:04.441761Z\",\"name\":\"plan_update\",\"turn_id\":\"262fa50fbca240e9\",\"plan_id\":\"plan_1\",\"step_id\":\"s4\",\"status\":\"done\"}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"be3e363bcd825bd7\",\"kind\":\"agent\",\"status\":{\"code\":\"ok\"},\"turn_id\":\"262fa50fbca240e9\",\"type\":\"span.end\",\"seq\":45,\"time\":\"2026-07-25T23:18:04.441775Z\"}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"262fa50fbca240e9\",\"kind\":\"turn\",\"status\":{\"code\":\"ok\"},\"output\":{\"messages\":[{\"role\":\"assistant\",\"parts\":[{\"type\":\"text\",\"text\":\"Here is a sourced brief: the AI agent market is projected to grow ~37% to $7.0B in 2026. (Draft attached, reviewer-approved.)\"}]}]},\"turn_id\":\"262fa50fbca240e9\",\"type\":\"span.end\",\"seq\":46,\"time\":\"2026-07-25T23:18:04.441797Z\"}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"7c80b9b1d9d07ede\",\"seq\":47,\"time\":\"2026-07-25T23:18:04.441824Z\",\"kind\":\"turn\",\"name\":\"turn 2\",\"turn_id\":\"7c80b9b1d9d07ede\",\"session_id\":\"sess_9f2\",\"input\":[{\"role\":\"user\",\"parts\":[{\"type\":\"text\",\"text\":\"Make it one sentence shorter.\"}]}]}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"6fae853a2eaf0b50\",\"parent_id\":\"7c80b9b1d9d07ede\",\"seq\":48,\"time\":\"2026-07-25T23:18:04.441848Z\",\"kind\":\"agent\",\"name\":\"Hermes\",\"turn_id\":\"7c80b9b1d9d07ede\",\"session_id\":\"sess_9f2\",\"agent\":{\"id\":\"orchestrator\",\"name\":\"Hermes\",\"role\":\"orchestrator\",\"model\":\"anthropic/claude-opus-4-8\"},\"model\":\"anthropic/claude-opus-4-8\"}\n{\"ot\":\"0.1\",\"type\":\"span.start\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"dbc762f899d55b44\",\"parent_id\":\"6fae853a2eaf0b50\",\"seq\":49,\"time\":\"2026-07-25T23:18:04.441870Z\",\"kind\":\"llm\",\"name\":\"chat anthropic/claude-opus-4-8\",\"turn_id\":\"7c80b9b1d9d07ede\",\"session_id\":\"sess_9f2\",\"model\":\"anthropic/claude-opus-4-8\",\"provider\":\"anthropic\",\"input\":{\"messages\":[{\"role\":\"user\",\"parts\":[{\"type\":\"text\",\"text\":\"Make it one sentence shorter.\"}]}]}}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"dbc762f899d55b44\",\"kind\":\"llm\",\"status\":{\"code\":\"ok\"},\"output\":{\"messages\":[{\"role\":\"assistant\",\"parts\":[{\"type\":\"text\",\"text\":\"Trimmed the brief by one sentence.\"}],\"finish_reason\":\"stop\"}]},\"usage\":{\"input_tokens\":640,\"output_tokens\":48,\"total_tokens\":688},\"cost\":{\"total\":0.003,\"currency\":\"USD\"},\"turn_id\":\"7c80b9b1d9d07ede\",\"type\":\"span.end\",\"seq\":50,\"time\":\"2026-07-25T23:18:04.441893Z\"}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"6fae853a2eaf0b50\",\"kind\":\"agent\",\"status\":{\"code\":\"ok\"},\"turn_id\":\"7c80b9b1d9d07ede\",\"type\":\"span.end\",\"seq\":51,\"time\":\"2026-07-25T23:18:04.441913Z\"}\n{\"ot\":\"0.1\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"span_id\":\"7c80b9b1d9d07ede\",\"kind\":\"turn\",\"status\":{\"code\":\"ok\"},\"output\":{\"messages\":[{\"role\":\"assistant\",\"parts\":[{\"type\":\"text\",\"text\":\"Done \u2014 shortened by one sentence.\"}]}]},\"turn_id\":\"7c80b9b1d9d07ede\",\"type\":\"span.end\",\"seq\":52,\"time\":\"2026-07-25T23:18:04.441929Z\"}\n{\"ot\":\"0.1\",\"type\":\"trace.end\",\"trace_id\":\"c9af8615db46168fc3e3174745139470\",\"seq\":53,\"time\":\"2026-07-25T23:18:04.441958Z\",\"outcome\":\"success\",\"outputs\":{\"artifact\":\"ai-agent-market-brief.md\",\"growth_rate_pct\":37.25},\"summary\":\"Produced and shortened a sourced brief on the AI agent market.\",\"metrics\":{\"duration_ms\":2.168,\"total_cost\":0.0219,\"llm_calls\":3,\"tool_calls\":4,\"agent_invocations\":3,\"turns\":2,\"handoffs\":1,\"errors\":1,\"retries\":1,\"total_tokens\":4016}}\n";
+const KIND_ORDER_COLOR = k => getComputedStyle(document.documentElement).getPropertyValue('--k-'+k).trim() || 'var(--k-chain)';
+
+let STATE = { traces: [], current: null };
+
+// ---------- parsing / reconstruction ----------
+function parseJSONL(text){
+  const recs = [];
+  for (const line of text.split('\n')){
+    const s = line.trim();
+    if (!s) continue;
+    try { recs.push(JSON.parse(s)); } catch(e){ /* skip bad line */ }
+  }
+  return recs;
+}
+function splitTraces(recs){
+  const m = new Map();
+  for (const r of recs){ const t=r.trace_id||'?'; if(!m.has(t)) m.set(t,[]); m.get(t).push(r); }
+  return [...m.values()];
+}
+function buildModel(recs){
+  const model={ header:null, footer:null, spans:new Map(), events:[], trace_id:null };
+  const starts=new Map();
+  for (const r of recs){
+    model.trace_id = model.trace_id || r.trace_id;
+    if (r.type==='trace.start') model.header=r;
+    else if (r.type==='trace.end') model.footer=r;
+    else if (r.type==='span') model.spans.set(r.span_id, normSpan({...r}));
+    else if (r.type==='span.start') starts.set(r.span_id, {...r});
+    else if (r.type==='span.end'){
+      const base = starts.get(r.span_id) || {span_id:r.span_id, kind:r.kind, trace_id:r.trace_id};
+      starts.delete(r.span_id);
+      const merged={...base};
+      merged.start_time = base.time || base.start_time;
+      merged.end_time = r.time;
+      for (const k in r){ if(!['type','time','seq'].includes(k)) merged[k]=r[k]; }
+      model.spans.set(r.span_id, normSpan(merged));
+    }
+    else if (r.type==='event') model.events.push(r);
+  }
+  for (const [sid,s] of starts){ s.start_time=s.time; s.open=true; model.spans.set(sid, normSpan(s)); } // unfinished
+  for (const s of model.spans.values()) s.children=[];
+  for (const [sid,s] of model.spans){ const p=s.parent_id; if(p&&model.spans.has(p)) model.spans.get(p).children.push(sid); }
+  model.evBySpan=new Map();
+  for (const ev of model.events){ if(!model.evBySpan.has(ev.span_id)) model.evBySpan.set(ev.span_id,[]); model.evBySpan.get(ev.span_id).push(ev); }
+  // time bounds
+  let min=Infinity,max=-Infinity;
+  for (const s of model.spans.values()){
+    const a=ts(s.start_time||s.time), b=ts(s.end_time||s.start_time||s.time);
+    if(a) min=Math.min(min,a); if(b) max=Math.max(max,b);
+  }
+  if(model.header) min=Math.min(min, ts(model.header.time)||min);
+  if(model.footer) max=Math.max(max, ts(model.footer.time)||max);
+  model.t0=isFinite(min)?min:0; model.t1=isFinite(max)?max:model.t0+1;
+  if(model.t1<=model.t0) model.t1=model.t0+1;
+  model.collapsed=new Set();
+  return model;
+}
+function normSpan(s){ s.kind=s.kind||'chain'; if(!s.start_time) s.start_time=s.time; return s; }
+function ts(iso){ if(!iso) return 0; const d=Date.parse(iso.replace('Z','')+'Z'); return isNaN(d)?0:d; }
+function roots(model){ const r=[]; for(const[sid,s]of model.spans){ if(!s.parent_id||!model.spans.has(s.parent_id)) r.push(sid);} return r; }
+
+// ---------- rollup ----------
+function rollup(model){
+  const byKind={}; let inTok=0,outTok=0,totTok=0,cost=0,errors=0;
+  for (const s of model.spans.values()){
+    byKind[s.kind]=(byKind[s.kind]||0)+1;
+    const u=s.usage||{}; inTok+=u.input_tokens||0; outTok+=u.output_tokens||0; totTok+=u.total_tokens||0;
+    const c=s.cost||{}; if(typeof c.total==='number') cost+=c.total;
+    if((s.status||{}).code==='error') errors++;
+  }
+  if(!totTok) totTok=inTok+outTok;
+  return { spans:model.spans.size, events:model.events.length, byKind, inTok,outTok,totTok, cost, errors,
+    outcome: model.footer?model.footer.outcome:'incomplete',
+    duration: (model.t1-model.t0),
+    name: model.header?model.header.name:'(no header)' };
+}
+
+// ---------- rendering ----------
+function render(model){
+  STATE.current=model;
+  document.getElementById('empty').style.display='none';
+  document.getElementById('grid').style.display='block';
+  const r=rollup(model);
+  const chips=document.getElementById('chips');
+  const oc = r.outcome==='success'?'ok':(r.outcome==='failure'?'err':'');
+  chips.innerHTML =
+    `<span class="chip ${oc}">outcome <b>${r.outcome}</b></span>`+
+    `<span class="chip">spans <b>${r.spans}</b></span>`+
+    `<span class="chip">events <b>${r.events}</b></span>`+
+    `<span class="chip">tokens <b>${r.totTok.toLocaleString()}</b></span>`+
+    `<span class="chip">cost <b>$${r.cost.toFixed(4)}</b></span>`+
+    `<span class="chip">duration <b>${fmtDur(r.duration)}</b></span>`+
+    (r.errors?`<span class="chip err">errors <b>${r.errors}</b></span>`:'');
+  renderTicks(model);
+  renderRows(model);
+}
+function fmtDur(ms){ if(ms<1000) return Math.round(ms)+'ms'; if(ms<60000) return (ms/1000).toFixed(2)+'s';
+  return Math.floor(ms/60000)+'m '+Math.round((ms%60000)/1000)+'s'; }
+function xPct(model,t){ return ((t-model.t0)/(model.t1-model.t0))*100; }
+
+function renderTicks(model){
+  const el=document.getElementById('ticks'); el.innerHTML='';
+  const N=5, span=model.t1-model.t0;
+  for(let i=0;i<=N;i++){ const t=i/N; const d=document.createElement('div');
+    d.className='tick'; d.style.left=(t*100)+'%'; d.textContent=fmtDur(span*t); el.appendChild(d); }
+}
+function renderRows(model){
+  const rows=document.getElementById('rows'); rows.innerHTML='';
+  const order=[];
+  const walk=(sid,depth)=>{ order.push([sid,depth]);
+    if(model.collapsed.has(sid)) return;
+    const kids=model.spans.get(sid).children.slice().sort((a,b)=>ts(model.spans.get(a).start_time)-ts(model.spans.get(b).start_time));
+    for(const c of kids) walk(c,depth+1);
+  };
+  roots(model).sort((a,b)=>ts(model.spans.get(a).start_time)-ts(model.spans.get(b).start_time)).forEach(r=>walk(r,0));
+  for(const [sid,depth] of order) rows.appendChild(renderRow(model,sid,depth));
+}
+function renderRow(model,sid,depth){
+  const s=model.spans.get(sid);
+  const row=document.createElement('div'); row.className='row'; row.dataset.sid=sid;
+  const a=ts(s.start_time||s.time), b=ts(s.end_time||s.start_time||s.time)||a+1;
+  const kids=s.children.length;
+  const hasKids=kids>0;
+  const collapsed=model.collapsed.has(sid);
+  const color=KIND_ORDER_COLOR(s.kind);
+  const name=document.createElement('div'); name.className='name'; name.style.paddingLeft=(6+depth*14)+'px';
+  const tgl=document.createElement('span'); tgl.className='toggle'; tgl.textContent=hasKids?(collapsed?'▸':'▾'):'';
+  tgl.onclick=(e)=>{ e.stopPropagation(); if(collapsed)model.collapsed.delete(sid); else model.collapsed.add(sid); renderRows(model); };
+  const kind=document.createElement('span'); kind.className='kind'; kind.textContent=s.kind; kind.style.background=color;
+  const nm=document.createElement('span'); nm.className='nm'; nm.textContent=s.name||s.kind;
+  name.append(tgl,kind,nm);
+  const track=document.createElement('div'); track.className='track';
+  const bar=document.createElement('div'); bar.className='bar'+(s.open?' open':'');
+  const left=xPct(model,a), width=Math.max(0.4, xPct(model,b)-xPct(model,a));
+  bar.style.left=left+'%'; bar.style.width=width+'%'; bar.style.background=color;
+  if((s.status||{}).code==='error') bar.style.outline='2px solid var(--err)';
+  const lbl=document.createElement('span'); lbl.className='barlbl';
+  const dur=s.duration_ms!=null?Math.round(s.duration_ms)+'ms':(b>a?Math.round(b-a)+'ms':'');
+  const tok=(s.usage&&s.usage.total_tokens)?(' · '+s.usage.total_tokens+'tok'):'';
+  lbl.textContent=dur+tok; bar.appendChild(lbl); track.appendChild(bar);
+  for(const ev of (model.evBySpan.get(sid)||[])){ const m=document.createElement('div'); m.className='evmark';
+    m.style.left=xPct(model,ts(ev.time))+'%'; m.title=ev.name; track.appendChild(m); }
+  row.append(name,track);
+  row.onclick=()=>{ document.querySelectorAll('.row.sel').forEach(r=>r.classList.remove('sel'));
+    row.classList.add('sel'); inspect(model,sid); };
+  return row;
+}
+
+// ---------- inspector ----------
+function esc(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function jp(o){ return esc(JSON.stringify(o,null,2)); }
+function inspect(model,sid){
+  const s=model.spans.get(sid); const el=document.getElementById('insp');
+  const a=ts(s.start_time), b=ts(s.end_time);
+  let h=`<h2>${esc(s.name||s.kind)}</h2><div class="sub"><span class="kind" style="background:${KIND_ORDER_COLOR(s.kind)}">${s.kind}</span> · <span class="mono">${sid}</span></div>`;
+  const rowsKV=[];
+  const st=(s.status||{}).code;
+  rowsKV.push(['status', st? (st==='error'?`<span class="badge err">${st}</span>`:`<span class="badge pass">${st}</span>`):'—']);
+  if(s.duration_ms!=null) rowsKV.push(['duration', Math.round(s.duration_ms)+' ms']);
+  else if(a&&b) rowsKV.push(['duration', Math.round(b-a)+' ms']);
+  if(s.model) rowsKV.push(['model', esc(s.model)]);
+  if(s.provider) rowsKV.push(['provider', esc(s.provider)]);
+  if(s.tool_name) rowsKV.push(['tool', esc(s.tool_name)+(s.tool_call_id?` <span class="mono">(${esc(s.tool_call_id)})</span>`:'')]);
+  if(s.agent) rowsKV.push(['agent', esc(s.agent.name||s.agent.id||'')+(s.agent.role?` · ${esc(s.agent.role)}`:'')]);
+  if(s.mode) rowsKV.push(['handoff', `${esc(s.from_agent)} → ${esc(s.to_agent)} <span class="mono">(${esc(s.mode)})</span>`]);
+  if(s.verdict) rowsKV.push(['verdict', `<span class="badge ${s.verdict==='pass'?'pass':'err'}">${esc(s.verdict)}</span>`]);
+  if(s.chosen!=null) rowsKV.push(['chosen', esc(JSON.stringify(s.chosen))+(s.confidence!=null?` · conf ${s.confidence}`:'')]);
+  const u=s.usage||{};
+  if(Object.keys(u).length){ rowsKV.push(['tokens', `in ${u.input_tokens||0} · out ${u.output_tokens||0} · total ${u.total_tokens||0}`
+    +(u.reasoning_tokens?` · reasoning ${u.reasoning_tokens}`:'')+(u.cache_read_tokens?` · cache ${u.cache_read_tokens}`:'')]); }
+  if(s.cost&&s.cost.total!=null) rowsKV.push(['cost', '$'+Number(s.cost.total).toFixed(6)]);
+  h+=`<div class="kv">`+rowsKV.map(([k,v])=>`<div class="k">${k}</div><div class="v">${v}</div>`).join('')+`</div>`;
+
+  // plan
+  if(s.plan){ h+=`<div class="sec">plan · ${esc(s.plan.goal||'')}</div>`;
+    h+=(s.plan.steps||[]).map(st=>`<div>${st.status==='done'?'✓':st.status==='in_progress'?'▸':st.status==='failed'?'✗':'○'} ${esc(st.description)} <span class="mono" style="color:var(--muted)">[${esc(st.status)}]</span></div>`).join(''); }
+
+  // messages
+  const inMsgs=(s.input&&s.input.messages)||null, outMsgs=(s.output&&s.output.messages)||null;
+  if(inMsgs){ h+=`<div class="sec">input messages</div>`+inMsgs.map(renderMsg).join(''); }
+  if(outMsgs){ h+=`<div class="sec">output messages</div>`+outMsgs.map(renderMsg).join(''); }
+
+  if(s.arguments!=null){ h+=`<div class="sec">arguments</div><pre class="j">${jp(s.arguments)}</pre>`; }
+  if(s.result!=null){ h+=`<div class="sec">result</div><pre class="j">${jp(s.result)}</pre>`; }
+  if(s.documents){ h+=`<div class="sec">retrieved documents</div><pre class="j">${jp(s.documents)}</pre>`; }
+  if(s.error){ h+=`<div class="sec">error</div><pre class="j">${jp(s.error)}</pre>`; }
+
+  const evs=model.evBySpan.get(sid)||[];
+  if(evs.length){ h+=`<div class="sec">events (${evs.length})</div><div class="evlist">`+
+    evs.map(ev=>`<div class="ev"><span class="en">${esc(ev.name)}</span><span>${esc(evSummary(ev))}</span></div>`).join('')+`</div>`; }
+
+  // raw
+  h+=`<div class="sec">raw span</div><pre class="j">${jp(stripRaw(s))}</pre>`;
+  el.innerHTML=h;
+}
+function renderMsg(m){
+  const parts=(m.parts||[]).map(p=>{
+    if(p.type==='text') return `<div class="part"><span class="pt">text</span><div>${esc(p.text||'')}</div></div>`;
+    if(p.type==='reasoning') return `<div class="part"><span class="pt">reasoning</span><div class="reason">${esc(p.text||'')}</div></div>`;
+    if(p.type==='tool_call') return `<div class="part"><span class="pt">tool_call · ${esc(p.name||'')}</span><pre class="j">${jp(p.arguments)}</pre></div>`;
+    if(p.type==='tool_call_response') return `<div class="part"><span class="pt">tool_result</span><pre class="j">${jp(p.result)}</pre></div>`;
+    return `<div class="part"><span class="pt">${esc(p.type)}</span><pre class="j">${jp(p)}</pre></div>`;
+  }).join('');
+  return `<div class="msg"><div class="mh">${esc(m.role)}${m.finish_reason?' · '+esc(m.finish_reason):''}</div><div class="mb">${parts}</div></div>`;
+}
+function evSummary(ev){
+  if(ev.name==='reasoning'){ const t=(ev.content&&ev.content[0]&&ev.content[0].text)||''; return t.slice(0,120); }
+  if(ev.name==='delta') return `[${ev.channel}] ${ev.content||''}`;
+  if(ev.name==='plan_update') return `${ev.step_id} → ${ev.status}`;
+  if(ev.name==='score') return `${ev.score_name}=${ev.value}`;
+  if(ev.name==='decision') return `chosen ${JSON.stringify(ev.chosen)}`;
+  if(ev.name==='artifact') return (ev.artifact&&ev.artifact.name)||'artifact';
+  if(ev.name==='log') return ev.message||'';
+  const {ot,type,trace_id,span_id,seq,time,name,...rest}=ev; return JSON.stringify(rest).slice(0,120);
+}
+function stripRaw(s){ const {children,open,...rest}=s; return rest; }
+
+// ---------- file loading ----------
+function loadText(text,label){
+  const traces=splitTraces(parseJSONL(text)).map(buildModel);
+  STATE.traces=traces;
+  const sel=document.getElementById('traceSel');
+  if(traces.length>1){ sel.style.display='inline-block'; sel.innerHTML=traces.map((m,i)=>
+    `<option value="${i}">${esc((m.header&&m.header.name)||m.trace_id||('trace '+i))}</option>`).join(''); }
+  else sel.style.display='none';
+  if(traces.length) render(traces[0]);
+}
+document.getElementById('traceSel').onchange=e=>render(STATE.traces[+e.target.value]);
+document.getElementById('file').onchange=async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  if(f.name.endsWith('.gz')){ // gzip: use DecompressionStream if available
+    try{ const ds=new DecompressionStream('gzip'); const stream=f.stream().pipeThrough(ds);
+      const text=await new Response(stream).text(); loadText(text,f.name); return;
+    }catch(err){ alert('Cannot decompress .gz in this browser; please gunzip first.'); return; } }
+  loadText(await f.text(), f.name);
+};
+document.getElementById('demo').onclick=()=>loadText(EMBEDDED_DEMO,'demo');
+
+// drag & drop
+const drop=document.getElementById('drop');
+window.addEventListener('dragover',e=>{e.preventDefault(); drop.classList.add('on');});
+window.addEventListener('dragleave',e=>{ if(e.relatedTarget===null) drop.classList.remove('on');});
+window.addEventListener('drop',async e=>{ e.preventDefault(); drop.classList.remove('on');
+  const f=e.dataTransfer.files[0]; if(f) loadText(await f.text(), f.name); });
+
+// theme toggle
+document.getElementById('theme').onclick=()=>{
+  const cur=document.documentElement.getAttribute('data-theme');
+  const next = cur==='light'?'dark':(cur==='dark'?'light':(matchMedia('(prefers-color-scheme: dark)').matches?'light':'dark'));
+  document.documentElement.setAttribute('data-theme',next);
+  if(STATE.current) render(STATE.current);
+};
+
+// auto-load ?trace=URL, else nothing
+(async()=>{ const u=new URLSearchParams(location.search).get('trace');
+  if(u){ try{ const t=await (await fetch(u)).text(); loadText(t,u);}catch(e){} } })();
+</script>
+</body>
+</html>

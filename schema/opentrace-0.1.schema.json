@@ -1,0 +1,358 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openagentlabs.ai/opentrace/schema/opentrace-0.1.schema.json",
+  "title": "OpenTrace Record",
+  "description": "Schema for a single OpenTrace v0.1 JSONL record. Each line of an OpenTrace stream MUST validate against this schema.",
+  "type": "object",
+  "required": ["ot", "type", "trace_id", "seq", "time"],
+  "properties": {
+    "ot": {
+      "type": "string",
+      "description": "OpenTrace spec version marker (major.minor).",
+      "pattern": "^[0-9]+\\.[0-9]+$"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["trace.start", "trace.end", "span.start", "span.end", "span", "event"]
+    },
+    "trace_id": { "$ref": "#/$defs/trace_id" },
+    "span_id": { "$ref": "#/$defs/span_id" },
+    "parent_id": {
+      "oneOf": [{ "$ref": "#/$defs/span_id" }, { "type": "null" }]
+    },
+    "seq": { "type": "integer", "minimum": 0 },
+    "time": { "type": "string", "format": "date-time" },
+    "session_id": { "type": "string" },
+    "turn_id": { "type": "string" },
+    "attributes": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "trace.start" } } },
+      "then": { "$ref": "#/$defs/header" }
+    },
+    {
+      "if": { "properties": { "type": { "const": "trace.end" } } },
+      "then": { "$ref": "#/$defs/footer" }
+    },
+    {
+      "if": { "properties": { "type": { "enum": ["span", "span.start", "span.end"] } } },
+      "then": { "$ref": "#/$defs/span" }
+    },
+    {
+      "if": { "properties": { "type": { "const": "event" } } },
+      "then": { "$ref": "#/$defs/event" }
+    }
+  ],
+  "$defs": {
+    "trace_id": {
+      "type": "string",
+      "description": "16-byte trace id as 32 lowercase hex chars (W3C Trace Context). Not all zeros.",
+      "pattern": "^[0-9a-f]{32}$",
+      "not": { "const": "00000000000000000000000000000000" }
+    },
+    "span_id": {
+      "type": "string",
+      "description": "8-byte span id as 16 lowercase hex chars (W3C Trace Context). Not all zeros.",
+      "pattern": "^[0-9a-f]{16}$",
+      "not": { "const": "0000000000000000" }
+    },
+    "span_kind": {
+      "type": "string",
+      "enum": [
+        "session", "turn", "agent", "workflow", "chain", "llm", "tool",
+        "retriever", "embedding", "reranker", "classifier", "guardrail",
+        "evaluator", "plan", "handoff", "harness", "human", "memory", "custom"
+      ]
+    },
+    "event_name": {
+      "type": "string",
+      "enum": [
+        "message", "reasoning", "tool_call", "tool_result", "decision",
+        "plan_update", "delta", "state", "artifact", "score", "metric",
+        "interrupt", "approval", "log", "error", "custom"
+      ]
+    },
+    "status": {
+      "type": "object",
+      "required": ["code"],
+      "properties": {
+        "code": { "type": "string", "enum": ["ok", "error", "cancelled", "timeout", "in_progress"] },
+        "message": { "type": ["string", "null"] }
+      }
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "message": { "type": "string" },
+        "retryable": { "type": "boolean" },
+        "code": { "type": "string" },
+        "stack": { "type": "string" },
+        "data": { "type": "object" }
+      }
+    },
+    "usage": {
+      "type": "object",
+      "description": "Token usage. Canonical keys aligned to gen_ai.usage.*; additional integer keys permitted.",
+      "properties": {
+        "input_tokens": { "type": "integer" },
+        "output_tokens": { "type": "integer" },
+        "total_tokens": { "type": "integer" },
+        "cache_read_tokens": { "type": "integer" },
+        "cache_creation_tokens": { "type": "integer" },
+        "reasoning_tokens": { "type": "integer" },
+        "audio_tokens": { "type": "integer" }
+      },
+      "additionalProperties": true
+    },
+    "cost": {
+      "type": "object",
+      "properties": {
+        "input": { "type": "number" },
+        "output": { "type": "number" },
+        "total": { "type": "number" },
+        "currency": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "metrics": { "type": "object", "additionalProperties": true },
+    "agent": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "description": { "type": "string" },
+        "role": {
+          "type": "string",
+          "enum": ["orchestrator", "supervisor", "worker", "subagent", "tool_agent", "peer"]
+        },
+        "model": { "type": "string" },
+        "framework": { "type": "string" }
+      }
+    },
+    "content_part": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "text", "reasoning", "tool_call", "tool_call_response",
+            "server_tool_call", "server_tool_call_response",
+            "blob", "file", "uri", "compaction", "generic"
+          ]
+        },
+        "text": { "type": "string" },
+        "signature": { "type": "string" },
+        "redacted": { "type": "boolean" },
+        "tool_call_id": { "type": "string" },
+        "name": { "type": "string" },
+        "arguments": {},
+        "result": {},
+        "is_error": { "type": "boolean" },
+        "mime_type": { "type": "string" },
+        "data": { "type": "string" },
+        "uri": { "type": "string" },
+        "bytes": { "type": "integer" },
+        "summary": { "type": "string" },
+        "replaced_count": { "type": "integer" },
+        "content": {}
+      }
+    },
+    "message": {
+      "type": "object",
+      "required": ["role", "parts"],
+      "properties": {
+        "role": { "type": "string", "enum": ["system", "user", "assistant", "tool"] },
+        "name": { "type": "string" },
+        "finish_reason": {
+          "type": "string",
+          "enum": ["stop", "length", "content_filter", "tool_call", "compaction", "error"]
+        },
+        "parts": { "type": "array", "items": { "$ref": "#/$defs/content_part" } }
+      }
+    },
+    "messages_io": {
+      "type": "object",
+      "properties": {
+        "messages": { "type": "array", "items": { "$ref": "#/$defs/message" } }
+      }
+    },
+    "plan": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "goal": { "type": "string" },
+        "revision": { "type": "integer" },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "description": { "type": "string" },
+              "status": {
+                "type": "string",
+                "enum": ["pending", "in_progress", "done", "skipped", "failed", "blocked"]
+              },
+              "depends_on": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    },
+    "header": {
+      "type": "object",
+      "required": ["name", "producer"],
+      "properties": {
+        "name": { "type": "string" },
+        "producer": {
+          "type": "object",
+          "required": ["name"],
+          "properties": {
+            "name": { "type": "string" },
+            "version": { "type": "string" },
+            "sdk": { "type": "string" },
+            "sdk_version": { "type": "string" }
+          }
+        },
+        "root": { "type": "object" },
+        "agent": { "$ref": "#/$defs/agent" },
+        "user": { "type": "object" },
+        "environment": { "type": "string" },
+        "execution_context": {
+          "type": "string",
+          "enum": ["runtime", "devtime", "eval", "replay", "shadow"]
+        },
+        "resource": { "type": "object" },
+        "system_instructions": { "type": "array" },
+        "tool_definitions": { "type": "array" },
+        "inputs": {},
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "metadata": { "type": "object" }
+      }
+    },
+    "footer": {
+      "type": "object",
+      "required": ["outcome"],
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "enum": ["success", "failure", "partial", "cancelled", "timeout"]
+        },
+        "status": { "$ref": "#/$defs/status" },
+        "outputs": {},
+        "error": { "$ref": "#/$defs/error" },
+        "metrics": { "$ref": "#/$defs/metrics" },
+        "summary": { "type": "string" }
+      }
+    },
+    "span": {
+      "type": "object",
+      "required": ["span_id", "kind"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/span_kind" },
+        "name": { "type": "string" },
+        "start_time": { "type": "string", "format": "date-time" },
+        "end_time": { "type": "string", "format": "date-time" },
+        "duration_ms": { "type": "number" },
+        "status": { "$ref": "#/$defs/status" },
+        "input": {},
+        "output": {},
+        "error": { "$ref": "#/$defs/error" },
+        "usage": { "$ref": "#/$defs/usage" },
+        "cost": { "$ref": "#/$defs/cost" },
+        "metrics": { "$ref": "#/$defs/metrics" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "metadata": { "type": "object" },
+        "agent": { "$ref": "#/$defs/agent" },
+        "model": { "type": "string" },
+        "provider": { "type": "string" },
+        "request": { "type": "object" },
+        "response": { "type": "object" },
+        "tool_call_id": { "type": "string" },
+        "tool_name": { "type": "string" },
+        "tool_type": { "type": "string" },
+        "arguments": {},
+        "result": {},
+        "plan": { "$ref": "#/$defs/plan" },
+        "revision": { "type": "integer" },
+        "from_agent": { "type": "string" },
+        "to_agent": { "type": "string" },
+        "mode": { "type": "string", "enum": ["delegate", "transfer", "spawn", "return"] },
+        "reason": { "type": "string" },
+        "payload": {},
+        "returns": { "type": "boolean" },
+        "query": { "type": "string" },
+        "documents": { "type": "array" },
+        "candidates": { "type": "array" },
+        "chosen": {},
+        "confidence": { "type": "number" },
+        "scores": { "type": "object" },
+        "rationale": { "type": "string" },
+        "policy": { "type": "string" },
+        "verdict": { "type": "string", "enum": ["pass", "block", "flag"] },
+        "categories": { "type": "array" },
+        "interaction": { "type": "string" },
+        "operation": { "type": "string" },
+        "harness_name": { "type": "string" },
+        "role": { "type": "string" },
+        "subtype": { "type": "string" }
+      }
+    },
+    "event": {
+      "type": "object",
+      "required": ["span_id", "name"],
+      "properties": {
+        "name": { "$ref": "#/$defs/event_name" },
+        "message": { "$ref": "#/$defs/message" },
+        "content": {
+          "description": "reasoning event: array of content parts; delta event: string chunk.",
+          "oneOf": [
+            { "type": "array", "items": { "$ref": "#/$defs/content_part" } },
+            { "type": "string" }
+          ]
+        },
+        "signature": { "type": "string" },
+        "redacted": { "type": "boolean" },
+        "effort": { "type": "string" },
+        "tool_call_id": { "type": "string" },
+        "tool_name": { "type": "string" },
+        "arguments": {},
+        "result": {},
+        "is_error": { "type": "boolean" },
+        "options": { "type": "array" },
+        "chosen": {},
+        "rationale": { "type": "string" },
+        "branch": { "type": "string" },
+        "plan_id": { "type": "string" },
+        "step_id": { "type": "string" },
+        "status": { "type": "string" },
+        "delta": {},
+        "channel": { "type": "string", "enum": ["text", "reasoning", "tool_args"] },
+        "index": { "type": "integer" },
+        "operation": { "type": "string" },
+        "key": { "type": "string" },
+        "value": {},
+        "scope": { "type": "string" },
+        "artifact": { "type": "object" },
+        "score_name": { "type": "string" },
+        "data_type": { "type": "string" },
+        "comment": { "type": "string" },
+        "target_span_id": { "type": "string" },
+        "name_metric": { "type": "string" },
+        "unit": { "type": "string" },
+        "level": { "type": "string" },
+        "source": { "type": "string" },
+        "requested": {},
+        "decision": {},
+        "actor": {},
+        "error": { "$ref": "#/$defs/error" },
+        "subtype": { "type": "string" },
+        "data": {}
+      }
+    }
+  }
+}
